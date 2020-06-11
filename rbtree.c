@@ -1,6 +1,6 @@
 #define	__MODULE__	"RBTREE"
-#define	__IDENT__	"X.00-01"
-#define	__REV__		"0.01.0"
+#define	__IDENT__	"X.00-02ECO1"
+#define	__REV__		"0.02.1"
 
 #ifdef	__GNUC__
 	#ident			__IDENT__
@@ -15,19 +15,20 @@
 /*
 **++
 **
-**  FACILITY:  nDPI, a test of using nDPI API
+**  DESCRIPTION: A portable Red-Black Tree API
 **
-**  DESCRIPTION: A simplest example of using nDPI API to performs analyzing of traffic.
-**
-**  BUILD:
-**
-**  USAGE:
+**  USAGE: Add rbtree.c and rbtree.h into u project.
 **
 **  AUTHORS: Ruslan R. (The BadAss SysMan) Laishev
 **
 **  CREATION DATE:  17-FEB-2020
 **
 **  MODIFICATION HISTORY:
+**
+**	18-MAR-2020	RRL	Source level optimization in the rb_tree_search() - removed a multiple calling of cmpkey() routine.
+**
+**	11-JUN-2020	RRL	Fixe compilation warning and other minor bugs.
+**
 **--
 */
 
@@ -35,10 +36,21 @@
 #define	__ARCH__NAME__	"VAX"
 #endif
 
-#include	<stdlib.h>
+#include	<stdlib.h>	/* for NULL */
+#include	<string.h>
 #include	"rbtree.h"
 
-inline static void DoRotateL(RB_TREE* tree, RB_TREE_NODE* node)
+
+				/* Magic */
+static	const char __starlet__ [] = {"StarLet"};
+static const unsigned *__starlet_ul__ = &__starlet__;
+
+
+
+inline static void DoRotateL	(
+			RB_TREE	*tree,
+		RB_TREE_NODE	*node
+		)
 {
 RB_TREE_NODE	*node0 = node->parent, *node1 = node, *node2 = node->left;
 
@@ -67,7 +79,10 @@ RB_TREE_NODE	*node0 = node->parent, *node1 = node, *node2 = node->left;
 }
 
 
-inline static void DoRotateR(RB_TREE* tree, RB_TREE_NODE* node)
+inline static void DoRotateR	(
+			RB_TREE	*tree,
+		RB_TREE_NODE	*node
+				)
 {
 RB_TREE_NODE	*node0 = node->parent, *node1 = node, *node2 = node->right;
 
@@ -96,7 +111,7 @@ RB_TREE_NODE	*node0 = node->parent, *node1 = node, *node2 = node->right;
 }
 
 
-inline	static RB_TREE_NODE* DoGetUncle(
+inline	static RB_TREE_NODE *DoGetUncle(
 		RB_TREE_NODE	*node
 			)
 {
@@ -115,7 +130,7 @@ inline static void DoInsertNode	(
 				)
 {
 	/* normal binary search tree's insertion method */
-	if(tree->keycmp(node->key, root->key) < 0)
+	if(tree->keycmp(tree, &node->key, &root->key) < 0)
 		{
 		if ( root->left != &tree->nl_node )
 			DoInsertNode(tree, root->left, node);
@@ -303,8 +318,8 @@ RB_TREE_NODE	*scapegoatNode;
 		while ( scapegoatNode->right != &tree->nl_node )
 			scapegoatNode = scapegoatNode->right;
 
-			if ( scapegoatNode != node )
-				return scapegoatNode;
+		if ( scapegoatNode != node )
+			return scapegoatNode;
 		}
 	else if ( node->right != &tree->nl_node )
 		{
@@ -330,6 +345,8 @@ int	rb_tree_init	(
 		)
 {
 	/* Initialize a new red-black tree structure */
+	tree->magic = * (__starlet_ul__);
+	tree->keysz = keySize;
 	tree->keycmp = keycmp;
 	tree->nr_node = 0;
 
@@ -371,7 +388,7 @@ int	rb_tree_insert	(
 
 	tree->nr_node += 1;
 
-	return node;
+	return	1;
 }
 
 
@@ -390,7 +407,7 @@ RB_TREE_NODE	*scapegoatNode, *checkNode;
 
 	if ( node != scapegoatNode )
 		{
-		memcpy(node->key, scapegoatNode->key, tree->keysz);
+		memcpy(&node->key, &scapegoatNode->key, tree->keysz);
 
 		return	rb_tree_remove(tree, scapegoatNode);
 		}
@@ -416,25 +433,31 @@ RB_TREE_NODE	*scapegoatNode, *checkNode;
 	return;
 }
 
-int	rb_tree_search(RB_TREE* tree, void* key, RB_TREE_NODE **node)
+int	rb_tree_search (RB_TREE *tree, void *pkey, RB_TREE_NODE **node)
 {
 RB_TREE_NODE	*currentNode = tree->rootnode;
+int	status = * ((int *) pkey);
 
 	/* Search the given key in the tree */
 	while (currentNode != &tree->nl_node)
 		{
-		if (tree->keycmp(key, currentNode->key) == 0)
-			{
-			*node =  currentNode;
-			return	1;
-			}
-		else if (tree->keycmp(key, currentNode->key) < 0)
+		if ( (status = tree->keycmp(tree, pkey, &currentNode->key)) == 0)
+			return	(*node =  currentNode, 1);
+
+		currentNode = (status < 0) ? currentNode->left : currentNode->right;
+
+		/*
+		 * Fucking China stuff ...
+
+		else if ( tree->keycmp(pkey, &currentNode->key) < 0)
 			currentNode = currentNode->left;
-		else if (tree->keycmp(key, currentNode->key) > 0)
+		else if ( tree->keycmp(pkey, &currentNode->key) > 0 )
 			currentNode = currentNode->right;
+		*/
+
 		}
 
-	return 0;
+	return	0;
 }
 
 
@@ -533,8 +556,3 @@ RB_TREE_NODE	*currentNode;
 
 	return	NULL;
 }
-
-
-
-
-
