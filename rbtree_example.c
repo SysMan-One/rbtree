@@ -1,6 +1,6 @@
 #define	__MODULE__	"RBTEXMPL"
-#define	__IDENT__	"X.00-01"
-#define	__REV__		"0.01.0"
+#define	__IDENT__	"X.00-02"
+#define	__REV__		"0.02.0"
 
 #ifdef	__GNUC__
 	#ident			__IDENT__
@@ -36,7 +36,6 @@
 #endif
 
 #include	<stdlib.h>
-#include	<pthread.h>
 
 #include	"rbtree.h"
 
@@ -47,41 +46,22 @@
 #define		__TFAC__ __FAC__ ": "
 #include	"utility_routines.h"
 
-ASC	q_logfspec = {0},
-	q_confspec = {0};
+int	g_trace = 1;
 
 
-
-int	g_exit_flag = 0,		/* Global flag 'all must to be stop'	*/
-	g_trace = 1,			/* A flag to produce extensible logging	*/
-	g_logsize = 0;
-
-
-OPTS optstbl [] =
-{
-	{$ASCINI("config"),	&q_confspec, ASC$K_SZ,	OPTS$K_CONF},
-
-	{$ASCINI("trace"),	&g_trace, 0,		OPTS$K_OPT},
-	{$ASCINI("logfile"),	&q_logfspec, ASC$K_SZ,	OPTS$K_STR},
-	{$ASCINI("logsize"),	&g_logsize, 0,		OPTS$K_INT},
-
-	OPTS_NULL
-};
-
-
-pthread_rwlock_t	tree_rwlock = PTHREAD_RWLOCK_INITIALIZER;
 RB_TREE	tree = {0};
 
 static int	cmpkey	(
-		void	*x,
-		void	*y
+		RB_TREE	*tree,
+		void	*key1,
+		void	*key2
 			)
 
 {
 int	ix, iy;
 
-	ix = (int) x;
-	iy = (int) y;
+	ix = * ((int *) key1);
+	iy = * ((int *) key2);
 
 	return	(ix - iy);
 
@@ -97,66 +77,63 @@ typedef	struct __flow__ {
 
 } FLOW;
 
-#define	NODECOUNT	13
+
+
+const	char items [][8] = {"E", "F", "G", "H", "A", "B", "C", "D"};
+const	int	items_nr = $ARRSZ(items);
+
+FLOW	fe[$ARRSZ(items)] = {0};
 
 int	main	(int argc, char* argv[])
 {
 int	status, i;
-pthread_t	tid;
-FLOW	fe[NODECOUNT] = {0}, *pf;
-RB_TREE_NODE	*pnode;
-
-	$LOG(STS$K_INFO, "Rev: " __IDENT__ "/"  __ARCH__NAME__   ", (built  at "__DATE__ " " __TIME__ " with CC " __VERSION__ ")");
-
-	/*
-	 * Process command line arguments
-	 */
-	__util$getparams(argc, argv, optstbl);
-
-	if ( $ASCLEN(&q_logfspec) )
-		{
-		__util$deflog($ASCPTR(&q_logfspec), NULL);
-
-		$LOG(STS$K_INFO, "Rev: " __IDENT__ "/"  __ARCH__NAME__   ", (built  at "__DATE__ " " __TIME__ " with CC " __VERSION__ ")");
-		}
-
-	if ( g_trace )
-		__util$showparams(optstbl);
+FLOW	*pf;
+RB_TREE_NODE	*pnode, *tmpnode;
 
 	status = rb_tree_init(&tree, sizeof(int), cmpkey);
 
-	for (i = 0; i < NODECOUNT; i++)
+	for (i = 0; i < items_nr; i++)
 		{
 		pf = &fe[i];
-		pf->rb_node.key = NODECOUNT - i;
-		$ASCLEN(&pf->val) = (unsigned char) snprintf($ASCPTR(&pf->val), ASC$K_SZ - 1, "Record #%d", i);
+
+		pf->rb_node.key = items[i][0];
+		__util$str2asc(items[i], &pf->val);
 
 		status = rb_tree_insert(&tree, &pf->rb_node);
 
-		$IFTRACE(g_trace, "Inserted node[key=%d, val=%.*s]", pf->rb_node.key, $ASC(&pf->val));
+		$IFTRACE(g_trace, "[tree=%d] Inserted node[key=%d, val=%.*s]", tree.nr_node, pf->rb_node.key, $ASC(&pf->val));
 		}
 
 	for (pnode = rb_tree_node_head(&tree); pnode; pnode = rb_tree_node_next(&tree, pnode), i)
-		{
-		pf = (FLOW *) pnode;
-		$IFTRACE(g_trace, "Retrieved node[key=%d, val=%.*s]", pnode->key, $ASC(&pf->val));
-		}
-
-
-
-	rb_tree_search(&tree, (void *)5, &pnode);
-	rb_tree_remove(&tree, pnode);
+		pf = (FLOW *) pnode,  $IFTRACE(g_trace, "Retrieved node[key=%d, val=%.*s]", pnode->key, $ASC(&pf->val));
 
 	for (pnode = rb_tree_node_head(&tree); pnode; pnode = rb_tree_node_next(&tree, pnode), i)
+
+		pf = (FLOW *) pnode,  $IFTRACE(g_trace, "Retrieved node[key=%d, val=%.*s]", pnode->key, $ASC(&pf->val));
+	for (pnode = rb_tree_node_head(&tree); pnode; pnode = rb_tree_node_next(&tree, pnode), i)
+		pf = (FLOW *) pnode,  $IFTRACE(g_trace, "Retrieved node[key=%d, val=%.*s]", pnode->key, $ASC(&pf->val));
+
+	for (pnode = rb_tree_node_head(&tree); pnode; )
 		{
-		pf = (FLOW *) pnode;
-		$IFTRACE(g_trace, "Retrieved node[key=%d, val=%.*s]", pnode->key, $ASC(&pf->val));
+		tmpnode = pnode;
+		pf = (FLOW *) (tmpnode);
+
+		$IFTRACE(g_trace, "[tree=%d] Remove node[key=%d, val=%.*s] ...", tree.nr_node, pnode->key, $ASC(&pf->val));
+
+		pnode = rb_tree_node_next(&tree, pnode);
+
+		rb_tree_remove(&tree, tmpnode);
+
+		$IFTRACE(g_trace, "[tree=%d] Removed.", tree.nr_node);
 		}
+
+
+
+	for (pnode = rb_tree_node_head(&tree); pnode; pnode = rb_tree_node_next(&tree, pnode), i)
+		pf = (FLOW *) pnode,  $IFTRACE(g_trace, "[tree=%d] Retrieved node[key=%d, val=%.*s]", tree.nr_node, pnode->key, $ASC(&pf->val));
+
 
 
 	return	0;
 }
-
-
-
 

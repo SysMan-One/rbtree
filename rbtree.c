@@ -10,7 +10,7 @@
 #pragma GCC diagnostic ignored  "-Wparentheses"
 #pragma GCC diagnostic ignored	"-Wdiscarded-qualifiers"
 #pragma GCC diagnostic ignored	"-Wmissing-braces"
-#pragma GCC diagnostic ignored	"-Wfdollars-in-identifiers"
+//#pragma GCC diagnostic ignored	"-Wfdollars-in-identifiers"
 
 /*
 **++
@@ -43,7 +43,7 @@
 
 				/* Magic */
 static	const char __starlet__ [] = {"StarLet"};
-static const unsigned *__starlet_ul__ = &__starlet__;
+static const unsigned *__starlet_ul__ = (unsigned *) &__starlet__;
 
 
 
@@ -341,7 +341,7 @@ RB_TREE_NODE	*scapegoatNode;
 int	rb_tree_init	(
 		RB_TREE *tree,
 		int	keySize,
-		int	(*keycmp)(const void* data1, const void* data2)
+		int	(*keycmp)(RB_TREE *tree, const void *key1, const void *key2)
 		)
 {
 	/* Initialize a new red-black tree structure */
@@ -391,7 +391,7 @@ int	rb_tree_insert	(
 	return	1;
 }
 
-
+#if 0
 void	rb_tree_remove	(
 		RB_TREE		*tree,
 		RB_TREE_NODE	*node
@@ -432,6 +432,70 @@ RB_TREE_NODE	*scapegoatNode, *checkNode;
 
 	return;
 }
+#endif
+
+
+
+static void	__rb_tree_remove	(
+		RB_TREE		*tree,
+		RB_TREE_NODE	*node
+		)
+{
+RB_TREE_NODE	*scapegoatNode, *checkNode;
+
+	/*
+	** Copy the scapegoat's key and data into the deleting node
+	** the scapegoat is the real node to be deleted
+	*/
+	scapegoatNode = DoFindDeletionScapegoat(tree, node);
+
+	if ( node != scapegoatNode )
+		{
+		memcpy(&node->key, &scapegoatNode->key, tree->keysz);
+
+		return	rb_tree_remove(tree, scapegoatNode);
+		}
+
+	/* Maintain red-black rules before deleting */
+	DoDeleteMaintain(tree, scapegoatNode);
+
+	/* Delete scapegoat */
+	checkNode = scapegoatNode->parent;
+
+	if ( checkNode != &tree->nl_node )
+		{
+		if ( checkNode->left == scapegoatNode )
+			checkNode->left = &tree->nl_node;
+
+		if ( checkNode->right == scapegoatNode )
+			checkNode->right = &tree->nl_node;
+		}
+	else	tree->rootnode = &tree->nl_node;
+
+	tree->nr_node -= 1;
+
+	return;
+}
+
+
+void	rb_tree_remove	(
+		RB_TREE		*tree,
+		RB_TREE_NODE	*node
+		)
+{
+RB_TREE_NODE	scapegoatNode = *node;
+
+	return	__rb_tree_remove(tree, &scapegoatNode);
+
+	return;
+}
+
+
+
+
+
+
+
 
 int	rb_tree_search (RB_TREE *tree, void *pkey, RB_TREE_NODE **node)
 {
@@ -461,7 +525,7 @@ int	status = * ((int *) pkey);
 }
 
 
-RB_TREE_NODE	*rb_tree_node_head(RB_TREE* tree)
+RB_TREE_NODE	*rb_tree_node_head (RB_TREE* tree)
 {
 RB_TREE_NODE	*currentNode = tree->rootnode;
 
