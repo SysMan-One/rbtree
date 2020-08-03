@@ -240,46 +240,49 @@ static int	rb_insert (
 			int	data
 			)
 {
-RB_NODE	head = {0},	/* временный корень дерева*/
-	*g, *t,		/* дедушка и родитель */
-	*p, *q;		/* родитель и итератор */
-
+RB_NODE head = {0}; /* временный корень дерева*/
+RB_NODE *g, *t; /* дедушка и родитель */
+RB_NODE *p, *q; /* родитель и итератор */
 int	dir = RBTREE$K_LLINK, last;
 
 
 	/* если добавляемый элемент оказывается первым – то ничего делать не нужно*/
-	if ( !tree->root == NULL )
+	if ( !tree->root)
 		{
-		if ( !tree->root = rbtree_mknode ( data ) )
-			return	0;
+		if ( !(tree->root = rbtree_mknode ( data )) )
+			return 0;
 
 		/* сделать корень дерева черным */
 		tree->root->color = RBTREE$K_BLACK;
-		return 1;
+
+		return	1;
 		}
+
 
 	/* вспомогательные переменные */
 	t = &head;
 	g = p = NULL;
-	q = t->link[1] = tree->root;
+	q = t->link[RBTREE$K_RLINK] = tree->root;
+
+
 
 	/* основной цикл прохода по дереву */
-	for ( ; ; )
+	while ( 1 )
 		{
 		if ( q == NULL )
 			{
 			/* вставка ноды */
-			p->link[dir] = q = rbtree_mknode ( data );
-			tree->node_nr++ ;
-
-			if ( q == NULL )
+			if ( !(p->link[dir] = q = rbtree_mknode ( data )) )
 				return 0;
+
+			tree->node_nr++ ;
 			}
-		else if ( is_red ( q->link[0] ) && is_red ( q->link[1] ) )
+		else if ( is_red ( q->link[RBTREE$K_LLINK] ) && is_red ( q->link[RBTREE$K_RLINK] ) )
 			{
 			/* смена цвета */
 			q->color = RBTREE$K_RED;
-			q->link[RBTREE$K_LLINK]->color = q->link[RBTREE$K_RLINK]->color = !RBTREE$K_RED;
+			q->link[RBTREE$K_LLINK]->color = RBTREE$K_BLACK;
+			q->link[RBTREE$K_RLINK]->color = RBTREE$K_BLACK;
 			}
 
 		/* совпадение 2-х красных цветов */
@@ -289,7 +292,8 @@ int	dir = RBTREE$K_LLINK, last;
 
 			if ( q == p->link[last] )
 				t->link[dir2] = rb_single ( g, !last );
-			else	t->link[dir2] = rb_double ( g, !last );
+			else
+				t->link[dir2] = rb_double ( g, !last );
 			}
 
 		/* такой узел в дереве уже есть - выход из функции*/
@@ -306,10 +310,12 @@ int	dir = RBTREE$K_LLINK, last;
 		q = q->link[dir];
 		}
 
+	/* обновить указатель на корень дерева*/
+	tree->root = head.link[RBTREE$K_RLINK];
 
-	tree->root = head.link[RBTREE$K_RLINK];	/* обновить указатель на корень дерева*/
-	tree->root->color = RBTREE$K_BLACK;	/* сделать корень дерева черным */
 
+	/* сделать корень дерева черным */
+	tree->root->color = RBTREE$K_BLACK;
 	return 1;
 }
 
@@ -405,7 +411,7 @@ int	dir = RBTREE$K_RLINK;
 RB_TREE	 my_tree = {0};
 
 
-int main()
+int main	(void)
 {
 int	count = 10000000, res = 0, i = 0, rnd = 0;
 time_t start,time2;
