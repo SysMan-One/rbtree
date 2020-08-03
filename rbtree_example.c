@@ -1,6 +1,6 @@
 #define	__MODULE__	"RBTEXMPL"
-#define	__IDENT__	"X.00-02"
-#define	__REV__		"0.02.0"
+#define	__IDENT__	"X.00-03"
+#define	__REV__		"0.03.0"
 
 #ifdef	__GNUC__
 	#ident			__IDENT__
@@ -36,6 +36,7 @@
 #endif
 
 #include	<stdlib.h>
+#include	<errno.h>
 
 //#include	"rbtree.h"
 
@@ -146,15 +147,64 @@ RB_TREE_NODE	*pnode, *tmpnode;
 #define	RBTREE$K_LLINK	0
 #define	RBTREE$K_RLINK	1
 
-#define	RBTREE$K_BIN	0	/* An octet sequence */
-#define	RBTREE$K_WORD	1	/* 16 bits */
-#define	RBTREE$K_LONG	2	/* 32 bits */
-#define	RBTREE$K_QUAD	3	/* 64 bits */
-#define	RBTREE$K_OCTA	4	/* 128 bits */
+/*
+The options for the XAB$B_DTP field are listed in the following table:
+	Keyword 	Data Type		Sort Order
+	XAB$C_BN2 	Unsigned 2-byte binary 	Ascending
+	XAB$C_DBN2 	Unsigned 2-byte binary 	Descending
+	XAB$C_BN4 	Unsigned 4-byte binary 	Ascending
+	XAB$C_DBN4 	Unsigned 4-byte binary 	Descending
+	XAB$C_BN8 	Unsigned 8-byte binary 	Ascending
+	XAB$C_DBN8 	Unsigned 8-byte binary 	Descending
 
-#define	RBTREE$K_ASC	0x10	/* Ascending sort order */
-#define	RBTREE$K_DESC	0x20	/* Descending sort order */
-#define	RBTREE$K_NOCASE	0x40	/* Descending sort order */
+	XAB$C_IN2 	Signed 2-byte integer 	Ascending
+	XAB$C_DIN2 	Signed 2-byte integer 	Descending
+	XAB$C_IN4 	Signed 4-byte integer 	Ascending
+	XAB$C_DIN4 	Signed 4-byte integer 	Descending
+	XAB$C_IN8 	Signed 8-byte integer 	Ascending
+	XAB$C_DIN8 	Signed 8-byte integer 	Descending
+
+	XAB$C_COL 	Collating key		Ascending
+	XAB$C_DCOL 	Collating key		Descending
+	XAB$C_PAC 	Packed decimal string 	Ascending
+	XAB$C_DPAC 	Packed decimal string 	Descending
+
+	XAB$C_STG 1 	Left-justified string of unsigned 8-bit bytes 	Ascending
+	XAB$C_DSTG 	Left-justified string of unsigned 8-bit bytes 	Descending
+*/
+enum	{
+	KDTP$K_STG	= 0,
+	KDTP$K_BN2,
+	KDTP$K_BN4,
+	KDTP$K_BN8,
+	KDTP$K_IN2,
+	KDTP$K_IN4,
+	KDTP$K_IN8
+
+};
+
+#define	RBTREE$K_ASC	0x100	/* Ascending sort order */
+#define	RBTREE$K_DESC	0x200	/* Descending sort order */
+#define	RBTREE$K_NOCASE	0x400	/* Descending sort order */
+
+
+#define	RBTREE$K_STG	KDTP$K_STG
+#define	RBTREE$K_DSTG	(KDTP$K_STG  | RBTREE$K_DESC)
+
+#define	RBTREE$K_BN2	KDTP$K_BN2
+#define	RBTREE$K_DBN2	(KDTP$K_BN2  | RBTREE$K_DESC)
+#define	RBTREE$K_BN4	KDTP$K_BN4
+#define	RBTREE$K_DBN4	(KDTP$K_DBN4 | RBTREE$K_DESC)
+#define	RBTREE$K_BN8	KDTP$K_BN8
+#define	RBTREE$K_DBN8	(KDTP$K_BN8  | RBTREE$K_DESC)
+
+#define	RBTREE$K_IN2	KDTP$K_IN2
+#define	RBTREE$K_IBN2	(KDTP$K_IN2  | RBTREE$K_DESC)
+#define	RBTREE$K_IN4	KDTP$K_IN4
+#define	RBTREE$K_IN4	(KDTP$K_IN4 | RBTREE$K_DESC)
+#define	RBTREE$K_IN8	KDTP$K_IN8
+#define	RBTREE$K_IBN8	(KDTP$K_IN8  | RBTREE$K_DESC)
+
 
 typedef	struct __rb_node__
 {
@@ -163,8 +213,8 @@ typedef	struct __rb_node__
 
 	union	{
 		int	data;
-		void	*ptr;
-		};
+	unsigned char	dblock[0];		/* Placeholder for data block as a continuation of the RB_NODE */
+			};
 
 } RB_NODE;
 
@@ -174,47 +224,188 @@ typedef struct __rb_tree__
 	int	node_nr;
 
 
-	int	keytype;
-	void	*kyeoff;			/* Offfset to key in the "data" buffer */
+	int	keydtp;				/* Key data type see constats RBTREE$K_STG */
+	int	keyoff;				/* Offfset to key in the "data" buffer */
 	int	keysz;				/* A size of the key in the node */
 
 	int	(* keycmp) (struct __rb_tree *tree, struct __rb_tree__ *node1, struct __rb_tree__ *node2);
-	int	(* alloc_node) (struct __rb_tree__ **node);
-	int	(* free_node)  (struct __rb_tree__ *node);
 } RB_TREE;
 
 
-static	inline int	is_red	(
+static int	__rbtree_keycmp_stg	(
+				RB_TREE		*tree,
+				RB_NODE		*node1,
+				RB_NODE		*node2
+					)
+{
+	return	memcmp(node1->dblock + tree->keyoff, node2->dblock +  tree->keyoff, tree->keysz);
+}
+
+static int	__rbtree_keycmp_dstg	(
+				RB_TREE		*tree,
+				RB_NODE		*node1,
+				RB_NODE		*node2
+					)
+{
+	return	memcmp(node2->dblock + tree->keyoff, node1->dblock +  tree->keyoff, tree->keysz);
+}
+
+
+static int	__rbtree_keycmp_bn2	(
+				RB_TREE		*tree,
+				RB_NODE		*node1,
+				RB_NODE		*node2
+					)
+{
+	return	( *(unsigned short *) (node1->dblock + tree->keyoff) ) - ( *(unsigned short *) (node2->dblock + tree->keyoff) );
+}
+
+
+static int	__rbtree_keycmp_dbn2	(
+				RB_TREE		*tree,
+				RB_NODE		*node2,
+				RB_NODE		*node1
+					)
+{
+	return	( *(unsigned short *) (node1->dblock + tree->keyoff) ) - ( *(unsigned short *) (node2->dblock + tree->keyoff) );
+
+}
+
+static int	__rbtree_keycmp_bn4	(
+				RB_TREE		*tree,
+				RB_NODE		*node1,
+				RB_NODE		*node2
+					)
+{
+	return	( *(unsigned int *) (node1->dblock + tree->keyoff) ) < ( *(unsigned int *) (node2->dblock + tree->keyoff) );
+}
+
+static int	__rbtree_keycmp_dbn4	(
+				RB_TREE		*tree,
+				RB_NODE		*node2,
+				RB_NODE		*node1
+					)
+{
+		return	( *(unsigned int *) (node1->dblock + tree->keyoff) ) < ( *(unsigned int *) (node2->dblock + tree->keyoff) );
+}
+
+
+
+static int	__rbtree_keycmp_bn8	(
+				RB_TREE		*tree,
+				RB_NODE		*node1,
+				RB_NODE		*node2
+					)
+{
+	return	( *(u_int64_t *) (node1->dblock + tree->keyoff) ) - ( *(u_int64_t *) (node2->dblock + tree->keyoff) );
+}
+
+static int	__rbtree_keycmp_dbn8	(
+				RB_TREE		*tree,
+				RB_NODE		*node2,
+				RB_NODE		*node1
+					)
+{
+	return	( *(u_int64_t *) (node1->dblock + tree->keyoff) ) - ( *(u_int64_t *) (node2->dblock + tree->keyoff) );
+}
+
+
+
+static int	__rbtree_keycmp_in2	(
+				RB_TREE		*tree,
+				RB_NODE		*node1,
+				RB_NODE		*node2
+					)
+{
+	return	( *(short *) (node1->dblock + tree->keyoff) ) - ( *(short *) (node2->dblock + tree->keyoff) );
+}
+
+
+static int	__rbtree_keycmp_din2	(
+				RB_TREE		*tree,
+				RB_NODE		*node2,
+				RB_NODE		*node1
+					)
+{
+	return	( *(short *) (node1->dblock + tree->keyoff) ) - ( *(short *) (node2->dblock + tree->keyoff) );
+}
+
+static int	__rbtree_keycmp_in4	(
+				RB_TREE		*tree,
+				RB_NODE		*node1,
+				RB_NODE		*node2
+					)
+{
+	return	( *(int *) (node1->dblock + tree->keyoff) ) - ( *(int *) (node2->dblock + tree->keyoff) );
+}
+
+static int	__rbtree_keycmp_din4	(
+				RB_TREE		*tree,
+				RB_NODE		*node2,
+				RB_NODE		*node1
+					)
+{
+	return	( *(int *) (node1->dblock + tree->keyoff) ) - ( *(int *) (node2->dblock + tree->keyoff) );
+}
+
+
+
+static int	__rbtree_keycmp_in8	(
+				RB_TREE		*tree,
+				RB_NODE		*node1,
+				RB_NODE		*node2
+					)
+{
+	return	( *(int64_t *) (node1->dblock + tree->keyoff) ) - ( *(int64_t *) (node2->dblock + tree->keyoff) );
+}
+
+static int	__rbtree_keycmp_din8	(
+				RB_TREE		*tree,
+				RB_NODE		*node2,
+				RB_NODE		*node1
+					)
+{
+	return	( *(int64_t *) (node1->dblock + tree->keyoff) ) - ( *(int64_t *) (node2->dblock + tree->keyoff) );
+}
+
+
+
+
+
+
+
+
+static	inline int	__rb_is_red	(
 			RB_NODE *node
 				)
 {
 	return ((node != NULL) && (node->color == RBTREE$K_RED));
 }
 
-static inline RB_NODE	*rb_single (
-			RB_NODE  *root,
+static inline RB_NODE	*__rb_single (
+			RB_NODE  *node,
 			int	dir
 				)
 {
-RB_NODE *save = root->link[!dir];
+RB_NODE *save = node->link[!dir];
 
-	root->link[!dir] = save->link[dir];
-	save->link[dir] = root;
+	node->link[!dir] = save->link[dir];
+	save->link[dir] = node;
 
-	root->color = RBTREE$K_RED;
+	node->color = RBTREE$K_RED;
 	save->color = RBTREE$K_BLACK;
 
 	return	save;
 }
 
-static inline RB_NODE	*rb_double (
-			RB_NODE	 *root,
+static inline RB_NODE	*__rb_double (
+			RB_NODE	 *node,
 			int	dir
 				)
 {
-	root->link[!dir] = rb_single ( root->link[!dir], !dir );
+	node->link[!dir] = __rb_single ( node->link[!dir], !dir );
 
-	return rb_single ( root, dir );
+	return __rb_single ( node, dir );
 }
 
 
@@ -235,74 +426,70 @@ RB_NODE *rn = malloc ( sizeof  (RB_NODE) );
 }
 
 
-static int	rb_insert (
+static int	__util$rbtree_insert (
 			RB_TREE	*tree,
-			int	data
-			)
+			RB_TREE	*newnode
+				)
 {
-RB_NODE	head = {0},	/* временный корень дерева*/
-	*g, *t,		/* дедушка и родитель */
-	*p, *q;		/* родитель и итератор */
+RB_NODE	head = {0},	/* temporary root */
+	*g, *t,		/* grandfather and parent */
+	*p, *q;		/* parent  and iterator */
 
-int	dir = RBTREE$K_LLINK, last;
+int	dir = RBTREE$K_LLINK, last = 0xDEADBEEF;
 
-
-	/* если добавляемый элемент оказывается первым – то ничего делать не нужно*/
-	if ( !tree->root == NULL )
+	/* Is the tree is empty ?! */
+	if ( !tree->root )
 		{
-		if ( !tree->root = rbtree_mknode ( data ) )
-			return	0;
-
-		/* сделать корень дерева черным */
+		/* Yes - tree is empty, then just add first element as root */
+		tree->root = newnode;
 		tree->root->color = RBTREE$K_BLACK;
-		return 1;
+
+		return	1;
 		}
 
-	/* вспомогательные переменные */
+	/* Some initialization */
 	t = &head;
 	g = p = NULL;
-	q = t->link[1] = tree->root;
+	q = t->link[RBTREE$K_RLINK] = tree->root;
 
-	/* основной цикл прохода по дереву */
-	for ( ; ; )
+	/* Main loop to walk on tree */
+	while ( 1 )
 		{
 		if ( q == NULL )
 			{
-			/* вставка ноды */
-			p->link[dir] = q = rbtree_mknode ( data );
+			/* Insert new node */
+			p->link[dir] = q = newnode;
 			tree->node_nr++ ;
-
-			if ( q == NULL )
-				return 0;
 			}
-		else if ( is_red ( q->link[0] ) && is_red ( q->link[1] ) )
+		else if ( __rb_is_red ( q->link[RBTREE$K_LLINK] ) && __rb_is_red ( q->link[RBTREE$K_RLINK] ) )
 			{
-			/* смена цвета */
+			/* Change color ! */
 			q->color = RBTREE$K_RED;
-			q->link[RBTREE$K_LLINK]->color = q->link[RBTREE$K_RLINK]->color = !RBTREE$K_RED;
+			q->link[RBTREE$K_LLINK]->color = q->link[RBTREE$K_RLINK]->color = RBTREE$K_BLACK;
 			}
 
 		/* совпадение 2-х красных цветов */
-		if ( is_red ( q ) && is_red ( p ) )
+		if ( __rb_is_red ( q ) && __rb_is_red ( p ) )
 			{
-			int dir2 = t->link[RBTREE$K_RLINK] == g;
+			int dir2 = (t->link[RBTREE$K_RLINK] == g);
 
 			if ( q == p->link[last] )
-				t->link[dir2] = rb_single ( g, !last );
-			else	t->link[dir2] = rb_double ( g, !last );
+				t->link[dir2] = __rb_single ( g, !last );
+			else	t->link[dir2] = __rb_double ( g, !last );
 			}
 
-		/* такой узел в дереве уже есть - выход из функции*/
-		if ( q->data == data )
+		last = dir;	/* Keep in minde .... */
+
+		/* Check for duplicates ! */
+		if ( !(dir = tree->keycmp(tree, q, newnode)) )
 			break;
 
-		last = dir;
-		dir = q->data < data;
+		dir = (dir < 0) ? RBTREE$K_RLINK : RBTREE$K_LLINK;
 
-		if ( g != NULL )
-			t = g;
+		t = g ? t : t;
 
-		g = p, p = q;
+		g = p;
+		p = q;
 		q = q->link[dir];
 		}
 
@@ -316,7 +503,7 @@ int	dir = RBTREE$K_LLINK, last;
 
 
 
-static	int rb_remove (
+static	int __util$rbtree_remove (
 		RB_TREE		*tree,
 			int	data
 			)
@@ -348,17 +535,17 @@ int	dir = RBTREE$K_RLINK;
 		if ( q->data == data )
 			f = q;
 
-		if ( !is_red ( q ) && !is_red ( q->link[dir] ) )
+		if ( !__rb_is_red ( q ) && !__rb_is_red ( q->link[dir] ) )
 			{
-			if ( is_red ( q->link[!dir] ) )
-				p = p->link[last] = rb_single ( q, dir );
-			else if ( !is_red ( q->link[!dir] ) )
+			if ( __rb_is_red ( q->link[!dir] ) )
+				p = p->link[last] = __rb_single ( q, dir );
+			else if ( !__rb_is_red ( q->link[!dir] ) )
 				{
 				RB_NODE *s = p->link[!last];
 
 				if ( s != NULL )
 					{
-					if ( !is_red ( s->link[!last] ) && !is_red ( s->link[last] ) )
+					if ( !__rb_is_red ( s->link[!last] ) && !__rb_is_red ( s->link[last] ) )
 						{
 						/* смена цвета узлов */
 						p->color = RBTREE$K_BLACK;
@@ -368,10 +555,10 @@ int	dir = RBTREE$K_RLINK;
 					else	{
 						int dir2 = g->link[RBTREE$K_RLINK] == p;
 
-						if ( is_red ( s->link[last] ) )
-							g->link[dir2] = rb_double ( p, last );
-						else if ( is_red ( s->link[!last] ) )
-							g->link[dir2] = rb_single ( p, last );
+						if ( __rb_is_red ( s->link[last] ) )
+							g->link[dir2] = __rb_double ( p, last );
+						else if ( __rb_is_red ( s->link[!last] ) )
+							g->link[dir2] = __rb_single ( p, last );
 
 						/* корректировка цвета узлов */
 						q->color = g->link[dir2]->color = RBTREE$K_RED;
@@ -402,24 +589,63 @@ int	dir = RBTREE$K_RLINK;
 
 
 
+
+/* A record to keep application specific data */
+typedef	struct __my_record__	{
+	int	key;		/* A primary key of the record */
+	ASC	sts;		/* "Payload" of the data record*/
+} MY_RECORD;
+
+
 RB_TREE	 my_tree = {0};
 
 
-int main()
+
+int	main	()
 {
-int	count = 10000000, res = 0, i = 0, rnd = 0;
+int	count = 10000000, res = 0, i = 0, rnd = 0, sz;
 time_t start,time2;
 volatile long unsigned t;
+RB_NODE	*pn;
+MY_RECORD *pr;
+
+	/* Define RB Tree */
+	my_tree.keyoff = offsetof (MY_RECORD, key);		/* An offset to key field in the record */
+
+	my_tree.keydtp = RBTREE$K_IN4;				/* Signed integer 4-byte integer */
+	my_tree.keysz = sizeof(int);				/* Keys size if the size of the FLOW_RECORD.key */
+	my_tree.keycmp = __rbtree_keycmp_in4;			/* We will use a routine from the RB Tree API */
 
 	start = time(NULL);
 	srand (time (NULL));
 
 	for( i = 0; i < count; i++)
 		{
-		rnd = (rand() % count);
+		/* Allocate memory for new RB TREE Entry/Data Record */
+		sz = sizeof(RB_TREE) + sizeof(MY_RECORD);	/* Single memory block for node and record */
 
+		if ( !(pn = malloc (sz)) )
+			{
+			$LOG(STS$K_ERROR, "No memory (%d) octets for new RB Node/Data record, errno=%d", sz, errno);
+			break;
+			}
 
-		res = rb_insert ( &my_tree, rnd );
+		/* Initialize RB Node/Data Entry with my data */
+		pn->color = RBTREE$K_RED;
+		pn->link[RBTREE$K_LLINK] = pn->link[RBTREE$K_RLINK] = NULL;
+
+		/*
+		** Initalize My Record area
+		** (My record is a continuation of the RB NODE area )
+		*/
+		pr = pn->dblock;
+		pr->key = rnd = (rand() % count);
+		$ASCLEN(&pr->sts) = (unsigned char) snprintf($ASCPTR(&pr->sts), ASC$K_SZ, "Record #%09d, key=%08x", i, pr->key);
+
+		/* Insert new node ! */
+		$IFTRACE(g_trace, "Inserting : %.*s ...", $ASC(&pr->sts));
+		res = __util$rbtree_insert ( &my_tree, pn );
+
 
 		if ( my_tree.node_nr == 5000000 )
 			break;
