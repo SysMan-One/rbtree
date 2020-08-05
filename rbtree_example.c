@@ -199,11 +199,15 @@ enum	{
 #define	RBTREE$K_DBN8	(KDTP$K_BN8  | RBTREE$K_DESC)
 
 #define	RBTREE$K_IN2	KDTP$K_IN2
-#define	RBTREE$K_IBN2	(KDTP$K_IN2  | RBTREE$K_DESC)
+#define	RBTREE$K_DIN2	(KDTP$K_IN2  | RBTREE$K_DESC)
 #define	RBTREE$K_IN4	KDTP$K_IN4
-#define	RBTREE$K_IN4	(KDTP$K_IN4 | RBTREE$K_DESC)
+#define	RBTREE$K_DIN4	(KDTP$K_IN4 | RBTREE$K_DESC)
 #define	RBTREE$K_IN8	KDTP$K_IN8
-#define	RBTREE$K_IBN8	(KDTP$K_IN8  | RBTREE$K_DESC)
+#define	RBTREE$K_DIN8	(KDTP$K_IN8  | RBTREE$K_DESC)
+
+
+#define	RBTREE$M_KEYDTP	0x0ff
+
 
 
 typedef	struct __rb_node__
@@ -211,8 +215,11 @@ typedef	struct __rb_node__
 	int	color;
 	struct __rb_node__ *link[2];
 
+	u_int64_t	key;
+
 	union	{
 		int	data;
+		void	*ptr;
 	unsigned char	dblock[0];		/* Placeholder for data block as a continuation of the RB_NODE */
 			};
 
@@ -228,149 +235,52 @@ typedef struct __rb_tree__
 	int	keyoff;				/* Offfset to key in the "data" buffer */
 	int	keysz;				/* A size of the key in the node */
 
-	int	(* keycmp) (struct __rb_tree *tree, struct __rb_tree__ *node1, struct __rb_tree__ *node2);
+	int	(* keycmp) (struct __rb_tree *tree, void *key1, void *key2);
 } RB_TREE;
 
 
-static int	__rbtree_keycmp_stg	(
+static int	__rbtree_cmpkey		(
 				RB_TREE		*tree,
-				RB_NODE		*node1,
-				RB_NODE		*node2
+				void 		*key1,
+				void		*key2
 					)
 {
-	return	memcmp(node1->dblock + tree->keyoff, node2->dblock +  tree->keyoff, tree->keysz);
+int	res;
+
+		switch ( tree->keydtp & RBTREE$M_KEYDTP )
+			{
+			case	RBTREE$K_BN2:
+				res = *((unsigned  short *) key1) - *((unsigned short *) key2);
+				break;
+
+			case	RBTREE$K_BN4:
+				res = *((unsigned int *) key1) - *((unsigned int *) key2);
+				break;
+
+			case	RBTREE$K_BN8:
+				res = *((u_int64_t *) key1) - *((u_int64_t *) key2);
+				break;
+
+			case	RBTREE$K_IN2:
+				res = *((short *) key1) - *((short *) key2);
+				break;
+
+			case	RBTREE$K_IN4:
+				res = *((int *) key1) - *((int *) key2);
+				break;
+
+			case	RBTREE$K_IN8:
+				res = *((int64_t *) key1) - *((int64_t *) key2);
+				break;
+
+			case	RBTREE$K_STG:
+				res = memcmp(key1, key2, tree->keysz);
+				break;
+			}
+
+
+	return	res;
 }
-
-static int	__rbtree_keycmp_dstg	(
-				RB_TREE		*tree,
-				RB_NODE		*node1,
-				RB_NODE		*node2
-					)
-{
-	return	memcmp(node2->dblock + tree->keyoff, node1->dblock +  tree->keyoff, tree->keysz);
-}
-
-
-static int	__rbtree_keycmp_bn2	(
-				RB_TREE		*tree,
-				RB_NODE		*node1,
-				RB_NODE		*node2
-					)
-{
-	return	( *(unsigned short *) (node1->dblock + tree->keyoff) ) - ( *(unsigned short *) (node2->dblock + tree->keyoff) );
-}
-
-
-static int	__rbtree_keycmp_dbn2	(
-				RB_TREE		*tree,
-				RB_NODE		*node2,
-				RB_NODE		*node1
-					)
-{
-	return	( *(unsigned short *) (node1->dblock + tree->keyoff) ) - ( *(unsigned short *) (node2->dblock + tree->keyoff) );
-
-}
-
-static int	__rbtree_keycmp_bn4	(
-				RB_TREE		*tree,
-				RB_NODE		*node1,
-				RB_NODE		*node2
-					)
-{
-	return	( *(unsigned int *) (node1->dblock + tree->keyoff) ) < ( *(unsigned int *) (node2->dblock + tree->keyoff) );
-}
-
-static int	__rbtree_keycmp_dbn4	(
-				RB_TREE		*tree,
-				RB_NODE		*node2,
-				RB_NODE		*node1
-					)
-{
-		return	( *(unsigned int *) (node1->dblock + tree->keyoff) ) < ( *(unsigned int *) (node2->dblock + tree->keyoff) );
-}
-
-
-
-static int	__rbtree_keycmp_bn8	(
-				RB_TREE		*tree,
-				RB_NODE		*node1,
-				RB_NODE		*node2
-					)
-{
-	return	( *(u_int64_t *) (node1->dblock + tree->keyoff) ) - ( *(u_int64_t *) (node2->dblock + tree->keyoff) );
-}
-
-static int	__rbtree_keycmp_dbn8	(
-				RB_TREE		*tree,
-				RB_NODE		*node2,
-				RB_NODE		*node1
-					)
-{
-	return	( *(u_int64_t *) (node1->dblock + tree->keyoff) ) - ( *(u_int64_t *) (node2->dblock + tree->keyoff) );
-}
-
-
-
-static int	__rbtree_keycmp_in2	(
-				RB_TREE		*tree,
-				RB_NODE		*node1,
-				RB_NODE		*node2
-					)
-{
-	return	( *(short *) (node1->dblock + tree->keyoff) ) - ( *(short *) (node2->dblock + tree->keyoff) );
-}
-
-
-static int	__rbtree_keycmp_din2	(
-				RB_TREE		*tree,
-				RB_NODE		*node2,
-				RB_NODE		*node1
-					)
-{
-	return	( *(short *) (node1->dblock + tree->keyoff) ) - ( *(short *) (node2->dblock + tree->keyoff) );
-}
-
-static int	__rbtree_keycmp_in4	(
-				RB_TREE		*tree,
-				RB_NODE		*node1,
-				RB_NODE		*node2
-					)
-{
-	return	( *(int *) (node1->dblock + tree->keyoff) ) - ( *(int *) (node2->dblock + tree->keyoff) );
-}
-
-static int	__rbtree_keycmp_din4	(
-				RB_TREE		*tree,
-				RB_NODE		*node2,
-				RB_NODE		*node1
-					)
-{
-	return	( *(int *) (node1->dblock + tree->keyoff) ) - ( *(int *) (node2->dblock + tree->keyoff) );
-}
-
-
-
-static int	__rbtree_keycmp_in8	(
-				RB_TREE		*tree,
-				RB_NODE		*node1,
-				RB_NODE		*node2
-					)
-{
-	return	( *(int64_t *) (node1->dblock + tree->keyoff) ) - ( *(int64_t *) (node2->dblock + tree->keyoff) );
-}
-
-static int	__rbtree_keycmp_din8	(
-				RB_TREE		*tree,
-				RB_NODE		*node2,
-				RB_NODE		*node1
-					)
-{
-	return	( *(int64_t *) (node1->dblock + tree->keyoff) ) - ( *(int64_t *) (node2->dblock + tree->keyoff) );
-}
-
-
-
-
 
 
 
@@ -409,131 +319,118 @@ static inline RB_NODE	*__rb_double (
 }
 
 
-static inline	RB_NODE  *rbtree_mknode (
-			int data
-				)
-{
-RB_NODE *rn = malloc ( sizeof  (RB_NODE) );
-
-	if ( !rn )
-		return rn;
-
-	rn->data = data;
-	rn->color = RBTREE$K_RED;
-	rn->link[RBTREE$K_LLINK] = rn->link[RBTREE$K_RLINK] = NULL;
-
-	return	rn;
-}
-
-
 static int	__util$rbtree_insert (
-			RB_TREE	*tree,
-			RB_TREE	*newnode
-				)
+				RB_TREE	*tree,
+				RB_NODE	*newnode
+					)
 {
-RB_NODE	head = {0},	/* temporary root */
-	*g, *t,		/* grandfather and parent */
-	*p, *q;		/* parent  and iterator */
+RB_NODE head = {0},	/* temporary root of tree */
+	*g, *t,		/* grandftaher and parent */
+	*p, *q;		/* parent and iterator */
+int	dir = RBTREE$K_LLINK, last = 0xDEADBEEF, i;
 
-int	dir = RBTREE$K_LLINK, last = 0xDEADBEEF;
-
-	/* Is the tree is empty ?! */
+	/* If it's first element in the tree - just add new node and exit */
 	if ( !tree->root )
 		{
-		/* Yes - tree is empty, then just add first element as root */
-		tree->root = newnode;
-		tree->root->color = RBTREE$K_BLACK;
+		tree->root = newnode;			/* Set newnode as tree's root */
+		tree->node_nr++;			/* Adjust node counter */
+		tree->root->color = RBTREE$K_BLACK;	/* Root  is BLACK */
 
-		return	1;
+		return	1;				/* Return SS$_NORMAL */
 		}
 
-	/* Some initialization */
+	/* Initialization of work variables .... */
 	t = &head;
 	g = p = NULL;
 	q = t->link[RBTREE$K_RLINK] = tree->root;
 
-	/* Main loop to walk on tree */
-	while ( 1 )
+
+	/* Main walking on the tree loop */
+	for (i = 0; ; i++)
 		{
-		if ( q == NULL )
+		if ( !q )
 			{
-			/* Insert new node */
-			p->link[dir] = q = newnode;
-			tree->node_nr++ ;
+
+			p->link[dir] = q = newnode;	/* Insert new node */
+			tree->node_nr++ ;		/* Adjust node counter */
 			}
 		else if ( __rb_is_red ( q->link[RBTREE$K_LLINK] ) && __rb_is_red ( q->link[RBTREE$K_RLINK] ) )
 			{
-			/* Change color ! */
+			/* Change colors ... */
 			q->color = RBTREE$K_RED;
-			q->link[RBTREE$K_LLINK]->color = q->link[RBTREE$K_RLINK]->color = RBTREE$K_BLACK;
+			q->link[RBTREE$K_LLINK]->color = RBTREE$K_BLACK;
+			q->link[RBTREE$K_RLINK]->color = RBTREE$K_BLACK;
 			}
 
 		/* совпадение 2-х красных цветов */
 		if ( __rb_is_red ( q ) && __rb_is_red ( p ) )
 			{
-			int dir2 = (t->link[RBTREE$K_RLINK] == g);
+			int	dir2 = (t->link[RBTREE$K_RLINK] == g);
 
-			if ( q == p->link[last] )
-				t->link[dir2] = __rb_single ( g, !last );
-			else	t->link[dir2] = __rb_double ( g, !last );
+			t->link[dir2] = (q == p->link[last]) ? __rb_single ( g, !last ) : __rb_double ( g, !last );
 			}
 
-		last = dir;	/* Keep in minde .... */
+		last = dir;
 
-		/* Check for duplicates ! */
-		if ( !(dir = tree->keycmp(tree, q, newnode)) )
+		/* So node is exist in the tree already - break from loop ! */
+		if ( !(dir = tree->keycmp(tree, &q->key, &newnode->key)) )
 			break;
 
-		dir = (dir < 0) ? RBTREE$K_RLINK : RBTREE$K_LLINK;
+		/* dir = q - newnode
+		 * q->data < data       true             false
+		 */
+		dir = (dir < 0)       ? RBTREE$K_RLINK : RBTREE$K_LLINK;
 
-		t = g ? t : t;
+		t = g ? g : t;
 
-		g = p;
-		p = q;
+		g = p, p = q;
 		q = q->link[dir];
 		}
 
-
-	tree->root = head.link[RBTREE$K_RLINK];	/* обновить указатель на корень дерева*/
-	tree->root->color = RBTREE$K_BLACK;	/* сделать корень дерева черным */
+	tree->root = head.link[RBTREE$K_RLINK];		/* Update tree's root */
+	tree->root->color = RBTREE$K_BLACK;		/* Make root is BLACK */
 
 	return 1;
 }
 
 
 
-
 static	int __util$rbtree_remove (
 		RB_TREE		*tree,
-			int	data
+		void		*key,
+		RB_NODE		**oldnode
 			)
 {
-RB_NODE	head = {0},	/* временный указатель на корень дерева */
-	*q, *p, *g,	/* вспомогательные переменные */
-	*f = NULL;	/* узел, подлежащий удалению */
-int	dir = RBTREE$K_RLINK;
+RB_NODE	head = {0},	/* Temporary root */
+	*q, *p, *g,	/* some stuff  */
+	*f = NULL;	/* node to kill */
+int	dir = RBTREE$K_RLINK, last;
 
+	/* If tree is sempty - nothing to do */
 	if ( !tree->root )
-		return	1;
+		return	0;
 
-	/* инициализация вспомогательных переменных */
+	/* Initialize of works variables */
 	q = &head;
 	g = p = NULL;
 	q->link[RBTREE$K_RLINK] = tree->root;
 
-	/* поиск и удаление */
+	/* Main looop to search and kill ... */
 	while ( q->link[dir] )
 		{
-		int last = dir;
+		last = dir;
 
 		/* сохранение иерархии узлов во временные переменные */
 		g = p, p = q;
 		q = q->link[dir];
-		dir = q->data < data;
 
-		/* сохранение найденного узла */
-		if ( q->data == data )
-			f = q;
+
+		/* dir = q->data < data; */
+
+		if ( !(dir = tree->keycmp(tree, q->dblock + tree->keyoff, key)) )
+			f = q;	/* Found the node, save this into the work variable */
+		else	dir = (dir < 0)       ? RBTREE$K_RLINK : RBTREE$K_LLINK;
+
 
 		if ( !__rb_is_red ( q ) && !__rb_is_red ( q->link[dir] ) )
 			{
@@ -570,13 +467,13 @@ int	dir = RBTREE$K_RLINK;
 			}
 		}
 
-	/* удаление найденного узла */
+	/* Found ? Kill node ! */
 	if ( f )
 		{
 		f->data = q->data;
 		p->link[ (p->link[RBTREE$K_RLINK] == q) ] = q->link[ (q->link[RBTREE$K_LLINK] == NULL) ] ;
 
-		free ( q );
+		*oldnode = q;
 		}
 
 	/* обновление указателя на корень дерева */
@@ -603,7 +500,7 @@ RB_TREE	 my_tree = {0};
 
 int	main	()
 {
-int	count = 10000000, res = 0, i = 0, rnd = 0, sz;
+int	count = 1000000, res = 0, i = 0, rnd = 0, sz;
 time_t start,time2;
 volatile long unsigned t;
 RB_NODE	*pn;
@@ -614,17 +511,15 @@ MY_RECORD *pr;
 
 	my_tree.keydtp = RBTREE$K_IN4;				/* Signed integer 4-byte integer */
 	my_tree.keysz = sizeof(int);				/* Keys size if the size of the FLOW_RECORD.key */
-	my_tree.keycmp = __rbtree_keycmp_in4;			/* We will use a routine from the RB Tree API */
+	my_tree.keycmp = __rbtree_cmpkey;			/* We will use a routine from the RB Tree API */
 
 	start = time(NULL);
 	srand (time (NULL));
 
 	for( i = 0; i < count; i++)
 		{
-		/* Allocate memory for new RB TREE Entry/Data Record */
-		sz = sizeof(RB_TREE) + sizeof(MY_RECORD);	/* Single memory block for node and record */
-
-		if ( !(pn = malloc (sz)) )
+		/* Allocate memory for new RB TREE Entry */
+		if ( !(pn = malloc (sz = sizeof(RB_TREE))) )
 			{
 			$LOG(STS$K_ERROR, "No memory (%d) octets for new RB Node/Data record, errno=%d", sz, errno);
 			break;
@@ -634,20 +529,28 @@ MY_RECORD *pr;
 		pn->color = RBTREE$K_RED;
 		pn->link[RBTREE$K_LLINK] = pn->link[RBTREE$K_RLINK] = NULL;
 
+
+		/* Allocate memory for new Data Record */
+		if ( !(pr = malloc (sizeof(MY_RECORD))) )
+			{
+			$LOG(STS$K_ERROR, "No memory (%d) octets for new RB Node/Data record, errno=%d", sz, errno);
+			break;
+			}
+
 		/*
 		** Initalize My Record area
 		** (My record is a continuation of the RB NODE area )
 		*/
-		pr = pn->dblock;
-		pr->key = rnd = (rand() % count);
+		pn->ptr = pr;
+		pr->key = (rand() % count);
 		$ASCLEN(&pr->sts) = (unsigned char) snprintf($ASCPTR(&pr->sts), ASC$K_SZ, "Record #%09d, key=%08x", i, pr->key);
 
 		/* Insert new node ! */
-		$IFTRACE(g_trace, "Inserting : %.*s ...", $ASC(&pr->sts));
+		//$IFTRACE(g_trace, "Inserting : %.*s ...", $ASC(&pr->sts));
 		res = __util$rbtree_insert ( &my_tree, pn );
 
 
-		if ( my_tree.node_nr == 5000000 )
+		if ( my_tree.node_nr == 500000 )
 			break;
 		}
 
