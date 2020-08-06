@@ -48,7 +48,7 @@ static const unsigned *__starlet_ul__ = (unsigned *) &__starlet__;
 
 
 inline static void DoRotateL	(
-			RB_TREE	*tree,
+			RB_NODE	*tree,
 		RB_TREE_NODE	*node
 		)
 {
@@ -80,7 +80,7 @@ RB_TREE_NODE	*node0 = node->parent, *node1 = node, *node2 = node->left;
 
 
 inline static void DoRotateR	(
-			RB_TREE	*tree,
+			RB_NODE	*tree,
 		RB_TREE_NODE	*node
 				)
 {
@@ -124,7 +124,7 @@ inline	static RB_TREE_NODE *DoGetUncle(
 
 
 inline static void DoInsertNode	(
-			RB_TREE	*tree,
+			RB_NODE	*tree,
 		RB_TREE_NODE	*root,
 		RB_TREE_NODE	*node
 				)
@@ -150,7 +150,7 @@ inline static void DoInsertNode	(
 }
 
 inline static void DoInsertMaintain(
-			RB_TREE	*tree,
+			RB_NODE	*tree,
 		RB_TREE_NODE	*node
 				)
 {
@@ -210,7 +210,7 @@ inline static void DoInsertMaintain(
 }
 
 inline static void DoDeleteMaintain(
-			RB_TREE	*tree,
+			RB_NODE	*tree,
 		RB_TREE_NODE	*node
 				)
 {
@@ -304,7 +304,7 @@ RB_TREE_NODE	*parent = node->parent, *brother;
 
 
 inline static RB_TREE_NODE *DoFindDeletionScapegoat(
-				RB_TREE	*tree,
+				RB_NODE	*tree,
 			RB_TREE_NODE	*node
 			)
 {
@@ -339,9 +339,9 @@ RB_TREE_NODE	*scapegoatNode;
 
 
 int	rb_tree_init	(
-		RB_TREE *tree,
+		RB_NODE *tree,
 		int	keySize,
-		int	(*keycmp)(RB_TREE *tree, const void *key1, const void *key2)
+		int	(*keycmp)(RB_NODE *tree, const void *key1, const void *key2)
 		)
 {
 	/* Initialize a new red-black tree structure */
@@ -366,7 +366,7 @@ int	rb_tree_init	(
 
 
 int	rb_tree_insert	(
-			RB_TREE	*tree,
+			RB_NODE	*tree,
 		RB_TREE_NODE	*node
 				)
 {
@@ -393,7 +393,7 @@ int	rb_tree_insert	(
 
 
 void	rb_tree_remove	(
-		RB_TREE		*tree,
+		RB_NODE		*tree,
 		RB_TREE_NODE	*node
 		)
 {
@@ -435,7 +435,7 @@ RB_TREE_NODE	*scapegoatNode, *checkNode;
 
 
 
-int	rb_tree_search (RB_TREE *tree, void *pkey, RB_TREE_NODE **node)
+int	rb_tree_search (RB_NODE *tree, void *pkey, RB_TREE_NODE **node)
 {
 RB_TREE_NODE	*currentNode = tree->rootnode;
 int	status = * ((int *) pkey);
@@ -463,7 +463,7 @@ int	status = * ((int *) pkey);
 }
 
 
-RB_TREE_NODE	*rb_tree_node_head (RB_TREE* tree)
+RB_TREE_NODE	*rb_tree_node_head (RB_NODE* tree)
 {
 RB_TREE_NODE	*currentNode = tree->rootnode;
 
@@ -480,7 +480,7 @@ RB_TREE_NODE	*currentNode = tree->rootnode;
 }
 
 RB_TREE_NODE	*rb_tree_node_tail	(
-			RB_TREE* tree
+			RB_NODE* tree
 				)
 {
 RB_TREE_NODE	*currentNode = tree->rootnode;
@@ -498,7 +498,7 @@ RB_TREE_NODE	*currentNode = tree->rootnode;
 }
 
 RB_TREE_NODE	*rb_tree_node_next	(
-			RB_TREE	*tree,
+			RB_NODE	*tree,
 		RB_TREE_NODE	*node
 				)
 {
@@ -529,7 +529,7 @@ RB_TREE_NODE	*currentNode;
 }
 
 RB_TREE_NODE	*rb_tree_node_prev	(
-			RB_TREE	*tree,
+			RB_NODE	*tree,
 		RB_TREE_NODE	*node
 				)
 {

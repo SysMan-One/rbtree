@@ -50,514 +50,484 @@
 int	g_trace = 1;
 
 
-#if	0
-RB_TREE	tree = {0};
-
-static int	cmpkey	(
-		RB_TREE	*tree,
-		void	*key1,
-		void	*key2
-			)
-
-{
-int	ix, iy;
-
-	ix = * ((int *) key1);
-	iy = * ((int *) key2);
-
-	return	(ix - iy);
-
-}
-
-typedef	struct __flow__ {
-	union	{
-		RB_TREE_NODE	rb_node;
-		ENTRY		ent;
-		};
-
-	ASC	val;
-
-} FLOW;
-
-
-
-const	char items [][8] = {"E", "F", "G", "H", "A", "B", "C", "D"};
-const	int	items_nr = $ARRSZ(items);
-
-FLOW	fe[$ARRSZ(items)] = {0};
-
-int	main	(int argc, char* argv[])
-{
-int	status, i;
-FLOW	*pf;
-RB_TREE_NODE	*pnode, *tmpnode;
-
-	status = rb_tree_init(&tree, sizeof(int), cmpkey);
-
-	for (i = 0; i < items_nr; i++)
-		{
-		pf = &fe[i];
-
-		pf->rb_node.key = items[i][0];
-		__util$str2asc(items[i], &pf->val);
-
-		status = rb_tree_insert(&tree, &pf->rb_node);
-
-		$IFTRACE(g_trace, "[tree=%d] Inserted node[key=%d, val=%.*s]", tree.nr_node, pf->rb_node.key, $ASC(&pf->val));
-		}
-
-	for (pnode = rb_tree_node_head(&tree); pnode; pnode = rb_tree_node_next(&tree, pnode), i)
-		pf = (FLOW *) pnode,  $IFTRACE(g_trace, "Retrieved node[key=%d, val=%.*s]", pnode->key, $ASC(&pf->val));
-
-	for (pnode = rb_tree_node_head(&tree); pnode; pnode = rb_tree_node_next(&tree, pnode), i)
-
-		pf = (FLOW *) pnode,  $IFTRACE(g_trace, "Retrieved node[key=%d, val=%.*s]", pnode->key, $ASC(&pf->val));
-	for (pnode = rb_tree_node_head(&tree); pnode; pnode = rb_tree_node_next(&tree, pnode), i)
-		pf = (FLOW *) pnode,  $IFTRACE(g_trace, "Retrieved node[key=%d, val=%.*s]", pnode->key, $ASC(&pf->val));
-
-	for (pnode = rb_tree_node_head(&tree); pnode; )
-		{
-		tmpnode = pnode;
-		pf = (FLOW *) (tmpnode);
-
-		$IFTRACE(g_trace, "[tree=%d] Remove node[key=%d, val=%.*s] ...", tree.nr_node, pnode->key, $ASC(&pf->val));
-
-		pnode = rb_tree_node_next(&tree, pnode);
-
-		rb_tree_remove(&tree, tmpnode);
-
-		$IFTRACE(g_trace, "[tree=%d] Removed.", tree.nr_node);
-		}
-
-
-
-	for (pnode = rb_tree_node_head(&tree); pnode; pnode = rb_tree_node_next(&tree, pnode), i)
-		pf = (FLOW *) pnode,  $IFTRACE(g_trace, "[tree=%d] Retrieved node[key=%d, val=%.*s]", tree.nr_node, pnode->key, $ASC(&pf->val));
-
-
-
-	return	0;
-}
-
-#endif
-
-
 #define	RBTREE$K_RED	1
 #define	RBTREE$K_BLACK	(!RBTREE$K_RED)
-#define	RBTREE$K_LLINK	0
-#define	RBTREE$K_RLINK	1
-
-/*
-The options for the XAB$B_DTP field are listed in the following table:
-	Keyword 	Data Type		Sort Order
-	XAB$C_BN2 	Unsigned 2-byte binary 	Ascending
-	XAB$C_DBN2 	Unsigned 2-byte binary 	Descending
-	XAB$C_BN4 	Unsigned 4-byte binary 	Ascending
-	XAB$C_DBN4 	Unsigned 4-byte binary 	Descending
-	XAB$C_BN8 	Unsigned 8-byte binary 	Ascending
-	XAB$C_DBN8 	Unsigned 8-byte binary 	Descending
-
-	XAB$C_IN2 	Signed 2-byte integer 	Ascending
-	XAB$C_DIN2 	Signed 2-byte integer 	Descending
-	XAB$C_IN4 	Signed 4-byte integer 	Ascending
-	XAB$C_DIN4 	Signed 4-byte integer 	Descending
-	XAB$C_IN8 	Signed 8-byte integer 	Ascending
-	XAB$C_DIN8 	Signed 8-byte integer 	Descending
-
-	XAB$C_COL 	Collating key		Ascending
-	XAB$C_DCOL 	Collating key		Descending
-	XAB$C_PAC 	Packed decimal string 	Ascending
-	XAB$C_DPAC 	Packed decimal string 	Descending
-
-	XAB$C_STG 1 	Left-justified string of unsigned 8-bit bytes 	Ascending
-	XAB$C_DSTG 	Left-justified string of unsigned 8-bit bytes 	Descending
-*/
-enum	{
-	KDTP$K_STG	= 0,
-	KDTP$K_BN2,
-	KDTP$K_BN4,
-	KDTP$K_BN8,
-	KDTP$K_IN2,
-	KDTP$K_IN4,
-	KDTP$K_IN8
-
-};
-
-#define	RBTREE$K_ASC	0x100	/* Ascending sort order */
-#define	RBTREE$K_DESC	0x200	/* Descending sort order */
-#define	RBTREE$K_NOCASE	0x400	/* Descending sort order */
 
 
-#define	RBTREE$K_STG	KDTP$K_STG
-#define	RBTREE$K_DSTG	(KDTP$K_STG  | RBTREE$K_DESC)
+//#define compLT(a,b) (a < b)
+#define compEQ(a,b) (a == b)
 
-#define	RBTREE$K_BN2	KDTP$K_BN2
-#define	RBTREE$K_DBN2	(KDTP$K_BN2  | RBTREE$K_DESC)
-#define	RBTREE$K_BN4	KDTP$K_BN4
-#define	RBTREE$K_DBN4	(KDTP$K_DBN4 | RBTREE$K_DESC)
-#define	RBTREE$K_BN8	KDTP$K_BN8
-#define	RBTREE$K_DBN8	(KDTP$K_BN8  | RBTREE$K_DESC)
-
-#define	RBTREE$K_IN2	KDTP$K_IN2
-#define	RBTREE$K_DIN2	(KDTP$K_IN2  | RBTREE$K_DESC)
-#define	RBTREE$K_IN4	KDTP$K_IN4
-#define	RBTREE$K_DIN4	(KDTP$K_IN4 | RBTREE$K_DESC)
-#define	RBTREE$K_IN8	KDTP$K_IN8
-#define	RBTREE$K_DIN8	(KDTP$K_IN8  | RBTREE$K_DESC)
-
-
-#define	RBTREE$M_KEYDTP	0x0ff
-
-
-
-typedef	struct __rb_node__
-{
-	int	color;
-	struct __rb_node__ *link[2];
-
-	u_int64_t	key;
+/* Red-Black tree description */
+typedef struct __rb_tree_node__ {
+    struct __rb_tree_node__	*left,			/* left child */
+			*right,				/* right child */
+			*parent;			/* parent */
+		int	color;				/* node color (BLACK, RED) */
 
 	union	{
-		int	data;
-		void	*ptr;
-	unsigned char	dblock[0];		/* Placeholder for data block as a continuation of the RB_NODE */
-			};
+		u_int64_t data;				/* Key itslef or address of the key's area */
+		void	*pdata;
+		};
 
 } RB_NODE;
 
+
 typedef struct __rb_tree__
 {
-	struct __rb_node__ *root;
-	int	node_nr;
+		RB_NODE	 *root,
+			sentinel;
 
+		int	node_nr;
 
-	int	keydtp;				/* Key data type see constats RBTREE$K_STG */
-	int	keyoff;				/* Offfset to key in the "data" buffer */
-	int	keysz;				/* A size of the key in the node */
+	union	{
+		u_int64_t	user;			/* An user data itself or address to user data area */
+		void	*	puser;
+		};
 
-	int	(* keycmp) (struct __rb_tree *tree, void *key1, void *key2);
+		int	(* keycmp) (struct __rb_tree__ *tree, void *key1, void *key2);
 } RB_TREE;
 
 
-static int	__rbtree_cmpkey		(
+static inline void	__rbtree_rotateLeft	(
 				RB_TREE		*tree,
-				void 		*key1,
-				void		*key2
+				RB_NODE		*x
 					)
 {
-int	res;
+RB_NODE	*y = x->right;
 
-		switch ( tree->keydtp & RBTREE$M_KEYDTP )
-			{
-			case	RBTREE$K_BN2:
-				res = *((unsigned  short *) key1) - *((unsigned short *) key2);
-				break;
+	/* establish x->right link */
+	if ( (x->right = y->left) != &tree->sentinel )
+		y->left->parent = x;
 
-			case	RBTREE$K_BN4:
-				res = *((unsigned int *) key1) - *((unsigned int *) key2);
-				break;
+	/* establish y->parent link */
+	if (y != &tree->sentinel)
+		y->parent = x->parent;
 
-			case	RBTREE$K_BN8:
-				res = *((u_int64_t *) key1) - *((u_int64_t *) key2);
-				break;
+	if (x->parent)
+		{
+		if (x == x->parent->left)
+			x->parent->left = y;
+		else	x->parent->right = y;
+		}
+	else	tree->root = y;
 
-			case	RBTREE$K_IN2:
-				res = *((short *) key1) - *((short *) key2);
-				break;
-
-			case	RBTREE$K_IN4:
-				res = *((int *) key1) - *((int *) key2);
-				break;
-
-			case	RBTREE$K_IN8:
-				res = *((int64_t *) key1) - *((int64_t *) key2);
-				break;
-
-			case	RBTREE$K_STG:
-				res = memcmp(key1, key2, tree->keysz);
-				break;
-			}
-
-
-	return	res;
+	/* link x and y */
+	if ( (y->left = x) != &tree->sentinel)
+		x->parent = y;
 }
 
+static inline void	__rbtree_rotateRight	(
+				RB_TREE		*tree,
+				RB_NODE	*x
+					)
 
-
-
-static	inline int	__rb_is_red	(
-			RB_NODE *node
-				)
 {
-	return ((node != NULL) && (node->color == RBTREE$K_RED));
-}
+RB_NODE	*y = x->left;
 
-static inline RB_NODE	*__rb_single (
-			RB_NODE  *node,
-			int	dir
-				)
-{
-RB_NODE *save = node->link[!dir];
+	/* establish x->left link */
+	if ( (x->left = y->right) != &tree->sentinel)
+		y->right->parent = x;
 
-	node->link[!dir] = save->link[dir];
-	save->link[dir] = node;
+	/* establish y->parent link */
+	if (y != &tree->sentinel)
+		y->parent = x->parent;
 
-	node->color = RBTREE$K_RED;
-	save->color = RBTREE$K_BLACK;
+	if (x->parent)
+		{
+		if (x == x->parent->right)
+			x->parent->right = y;
+		else	x->parent->left = y;
+		}
+	else	tree->root = y;
 
-	return	save;
-}
-
-static inline RB_NODE	*__rb_double (
-			RB_NODE	 *node,
-			int	dir
-				)
-{
-	node->link[!dir] = __rb_single ( node->link[!dir], !dir );
-
-	return __rb_single ( node, dir );
+	/* link x and y */
+	if ( (y->right = x) != &tree->sentinel)
+		x->parent = y;
 }
 
 
-static int	__util$rbtree_insert (
-				RB_TREE	*tree,
-				RB_NODE	*newnode
+
+/*************************************
+ *  maintain Red-Black tree balance  *
+ *  after inserting node x           *
+ *************************************/
+
+static void	__rbtree_insertFixup	(
+				RB_TREE *	tree,
+				RB_NODE	*	x
 					)
 {
-RB_NODE head = {0},	/* temporary root of tree */
-	*g, *t,		/* grandftaher and parent */
-	*p, *q;		/* parent and iterator */
-int	dir = RBTREE$K_LLINK, last = 0xDEADBEEF, i;
-
-	/* If it's first element in the tree - just add new node and exit */
-	if ( !tree->root )
+	/* check Red-Black properties */
+	while ( (x != tree->root) && (x->parent->color == RBTREE$K_RED) )
 		{
-		tree->root = newnode;			/* Set newnode as tree's root */
-		tree->node_nr++;			/* Adjust node counter */
-		tree->root->color = RBTREE$K_BLACK;	/* Root  is BLACK */
-
-		return	1;				/* Return SS$_NORMAL */
-		}
-
-	/* Initialization of work variables .... */
-	t = &head;
-	g = p = NULL;
-	q = t->link[RBTREE$K_RLINK] = tree->root;
-
-
-	/* Main walking on the tree loop */
-	for (i = 0; ; i++)
-		{
-		if ( !q )
+		/* we have a violation */
+		if ( x->parent == x->parent->parent->left )
 			{
+			RB_NODE *y = x->parent->parent->right;
 
-			p->link[dir] = q = newnode;	/* Insert new node */
-			tree->node_nr++ ;		/* Adjust node counter */
-			}
-		else if ( __rb_is_red ( q->link[RBTREE$K_LLINK] ) && __rb_is_red ( q->link[RBTREE$K_RLINK] ) )
-			{
-			/* Change colors ... */
-			q->color = RBTREE$K_RED;
-			q->link[RBTREE$K_LLINK]->color = RBTREE$K_BLACK;
-			q->link[RBTREE$K_RLINK]->color = RBTREE$K_BLACK;
-			}
-
-		/* совпадение 2-х красных цветов */
-		if ( __rb_is_red ( q ) && __rb_is_red ( p ) )
-			{
-			int	dir2 = (t->link[RBTREE$K_RLINK] == g);
-
-			t->link[dir2] = (q == p->link[last]) ? __rb_single ( g, !last ) : __rb_double ( g, !last );
-			}
-
-		last = dir;
-
-		/* So node is exist in the tree already - break from loop ! */
-		if ( !(dir = tree->keycmp(tree, &q->key, &newnode->key)) )
-			break;
-
-		/* dir = q - newnode
-		 * q->data < data       true             false
-		 */
-		dir = (dir < 0)       ? RBTREE$K_RLINK : RBTREE$K_LLINK;
-
-		t = g ? g : t;
-
-		g = p, p = q;
-		q = q->link[dir];
-		}
-
-	tree->root = head.link[RBTREE$K_RLINK];		/* Update tree's root */
-	tree->root->color = RBTREE$K_BLACK;		/* Make root is BLACK */
-
-	return 1;
-}
-
-
-
-static	int __util$rbtree_remove (
-		RB_TREE		*tree,
-		void		*key,
-		RB_NODE		**oldnode
-			)
-{
-RB_NODE	head = {0},	/* Temporary root */
-	*q, *p, *g,	/* some stuff  */
-	*f = NULL;	/* node to kill */
-int	dir = RBTREE$K_RLINK, last;
-
-	/* If tree is sempty - nothing to do */
-	if ( !tree->root )
-		return	0;
-
-	/* Initialize of works variables */
-	q = &head;
-	g = p = NULL;
-	q->link[RBTREE$K_RLINK] = tree->root;
-
-	/* Main looop to search and kill ... */
-	while ( q->link[dir] )
-		{
-		last = dir;
-
-		/* сохранение иерархии узлов во временные переменные */
-		g = p, p = q;
-		q = q->link[dir];
-
-
-		/* dir = q->data < data; */
-
-		if ( !(dir = tree->keycmp(tree, q->dblock + tree->keyoff, key)) )
-			f = q;	/* Found the node, save this into the work variable */
-		else	dir = (dir < 0)       ? RBTREE$K_RLINK : RBTREE$K_LLINK;
-
-
-		if ( !__rb_is_red ( q ) && !__rb_is_red ( q->link[dir] ) )
-			{
-			if ( __rb_is_red ( q->link[!dir] ) )
-				p = p->link[last] = __rb_single ( q, dir );
-			else if ( !__rb_is_red ( q->link[!dir] ) )
-				{
-				RB_NODE *s = p->link[!last];
-
-				if ( s != NULL )
+			if (y->color == RBTREE$K_RED)
+				{ /* uncle is RED */
+				x->parent->color = RBTREE$K_BLACK;
+				y->color = RBTREE$K_BLACK;
+				x->parent->parent->color = RBTREE$K_RED;
+				x = x->parent->parent;
+				}
+			else	{ /* uncle is BLACK */
+				if (x == x->parent->right)
 					{
-					if ( !__rb_is_red ( s->link[!last] ) && !__rb_is_red ( s->link[last] ) )
-						{
-						/* смена цвета узлов */
-						p->color = RBTREE$K_BLACK;
-						s->color = RBTREE$K_RED;
-						q->color = RBTREE$K_RED;
-						}
-					else	{
-						int dir2 = g->link[RBTREE$K_RLINK] == p;
+					/* make x a left child */
+					x = x->parent;
 
-						if ( __rb_is_red ( s->link[last] ) )
-							g->link[dir2] = __rb_double ( p, last );
-						else if ( __rb_is_red ( s->link[!last] ) )
-							g->link[dir2] = __rb_single ( p, last );
-
-						/* корректировка цвета узлов */
-						q->color = g->link[dir2]->color = RBTREE$K_RED;
-						g->link[dir2]->link[RBTREE$K_LLINK]->color = RBTREE$K_BLACK;
-						g->link[dir2]->link[RBTREE$K_RLINK]->color = RBTREE$K_BLACK;
-						}
+					__rbtree_rotateLeft(tree, x);
 					}
+
+				/* recolor and rotate */
+				x->parent->color = RBTREE$K_BLACK;
+				x->parent->parent->color = RBTREE$K_RED;
+
+				__rbtree_rotateRight(tree, x->parent->parent);
+				}
+			}
+		else	{
+			/* mirror image of above code */
+			RB_NODE *y = x->parent->parent->left;
+
+			if (y->color == RBTREE$K_RED)
+				{ /* uncle is RED */
+				x->parent->color = RBTREE$K_BLACK;
+				y->color = RBTREE$K_BLACK;
+				x->parent->parent->color = RBTREE$K_RED;
+				x = x->parent->parent;
+				}
+			else	{ /* uncle is BLACK */
+				if (x == x->parent->left)
+					{
+					x = x->parent;
+					__rbtree_rotateRight(tree, x);
+					}
+
+				x->parent->color = RBTREE$K_BLACK;
+				x->parent->parent->color = RBTREE$K_RED;
+
+				__rbtree_rotateLeft(tree, x->parent->parent);
 				}
 			}
 		}
 
-	/* Found ? Kill node ! */
-	if ( f )
-		{
-		f->data = q->data;
-		p->link[ (p->link[RBTREE$K_RLINK] == q) ] = q->link[ (q->link[RBTREE$K_LLINK] == NULL) ] ;
+	tree->root->color = RBTREE$K_BLACK;
+}
 
-		*oldnode = q;
+int	lib$rbtree_insert	(
+			RB_TREE	*	tree,
+			u_int64_t	*key,
+			RB_NODE	*	node_to_insert,
+			RB_NODE	**	node_is_found
+				)
+{
+RB_NODE *current, *parent;
+int	res;
+
+	/* find where node belongs */
+	current = tree->root;
+	parent = 0;
+
+	while ( current != &tree->sentinel )
+		{
+		if ( !(res = tree->keycmp(tree, key, current->data)) )
+			return	*node_is_found = current, 1;	/* Return existen node, SS$_NORMAL */
+
+		parent = current;
+		current = (0 > res) ? current->left : current->right;
 		}
 
-	/* обновление указателя на корень дерева */
-	if ( tree->root = head.link[RBTREE$K_RLINK] )
-		tree->root->color = RBTREE$K_BLACK;
+	node_to_insert->parent = parent;
+	node_to_insert->left = &tree->sentinel;
+	node_to_insert->right = &tree->sentinel;
+	node_to_insert->color = RBTREE$K_RED;
 
-	return 1;
+	/* insert node in tree */
+	if ( parent )
+		{
+		if ( 0 > tree->keycmp(tree, key, parent->data) )
+			parent->left = node_to_insert;
+		else	parent->right = node_to_insert;
+		}
+	else	tree->root = node_to_insert;
+
+	__rbtree_insertFixup(tree, node_to_insert);
+
+	return	1;
+}
+
+
+
+/*************************************
+ *  maintain Red-Black tree balance  *
+ *  after deleting node x            *
+ *************************************/
+
+static inline void	__rbtree_deleteFixup	(
+				RB_TREE	*	tree,
+				RB_NODE *	x
+				)
+{
+	while (x != tree->root && x->color == RBTREE$K_BLACK)
+		{
+		if (x == x->parent->left)
+			{
+			RB_NODE *w = x->parent->right;
+
+			if (w->color == RBTREE$K_RED)
+				{
+				w->color = RBTREE$K_BLACK;
+				x->parent->color = RBTREE$K_RED;
+
+				__rbtree_rotateLeft (tree, x->parent);
+
+				w = x->parent->right;
+				}
+
+			if ( (w->left->color == RBTREE$K_BLACK) && (w->right->color == RBTREE$K_BLACK))
+				{
+				w->color = RBTREE$K_RED;
+				x = x->parent;
+				}
+			else	{
+				if ( w->right->color == RBTREE$K_BLACK )
+					{
+					w->left->color = RBTREE$K_BLACK;
+					w->color = RBTREE$K_RED;
+
+					__rbtree_rotateRight (tree, w);
+
+					w = x->parent->right;
+					}
+
+				w->color = x->parent->color;
+				x->parent->color = RBTREE$K_BLACK;
+				w->right->color = RBTREE$K_BLACK;
+
+				__rbtree_rotateLeft (tree, x->parent);
+
+				x = tree->root;
+				}
+			}
+		else	{
+			RB_NODE *w = x->parent->left;
+
+			if ( w->color == RBTREE$K_RED )
+				{
+				w->color = RBTREE$K_BLACK;
+				x->parent->color = RBTREE$K_RED;
+
+				__rbtree_rotateRight (tree, x->parent);
+
+				w = x->parent->left;
+				}
+			if ( (w->right->color == RBTREE$K_BLACK) && (w->left->color == RBTREE$K_BLACK) )
+				{
+				w->color = RBTREE$K_RED;
+				x = x->parent;
+				}
+			else	{
+				if ( w->left->color == RBTREE$K_BLACK )
+					{
+					w->right->color = RBTREE$K_BLACK;
+					w->color = RBTREE$K_RED;
+
+					__rbtree_rotateLeft (tree, w);
+
+					w = x->parent->left;
+					}
+
+				w->color = x->parent->color;
+				x->parent->color = RBTREE$K_BLACK;
+				w->left->color = RBTREE$K_BLACK;
+
+				__rbtree_rotateRight (tree, x->parent);
+
+				x = tree->root;
+				}
+			}
+		}
+
+	x->color = RBTREE$K_BLACK;
+}
+
+int	lib$rbtree_delete	(
+				RB_TREE	*	tree,
+				RB_NODE *	node_to_kill,
+				RB_NODE **	node_to_free
+				)
+{
+RB_NODE	*x = NULL, *y = NULL;
+
+
+	*node_to_free = NULL;
+
+	if ( !node_to_kill || (node_to_kill == &tree->sentinel) )
+		return	0;	/* RNF */
+
+
+	if ( (node_to_kill->left == &tree->sentinel) || (node_to_kill->right == &tree->sentinel) )
+		{
+		/* y has a NIL node as a child */
+		y = node_to_kill;
+		}
+	else	{
+		/* find tree successor with a NIL node as a child */
+		y = node_to_kill->right;
+
+		while (y->left != &tree->sentinel)
+			y = y->left;
+		}
+
+	/* x is y's only child */
+	if ( y->left != &tree->sentinel )
+		x = y->left;
+	else	x = y->right;
+
+	/* remove y from the parent chain */
+	x->parent = y->parent;
+
+	if ( (x->parent = y->parent) )
+		{
+		if (y == y->parent->left)
+			y->parent->left = x;
+		else	y->parent->right = x;
+		}
+	else	tree->root = x;
+
+	if ( y != node_to_kill )
+		{
+		//node_to_kill->data = y->data;
+
+		node_to_kill->data  = node_to_kill->data ^ y->data;
+		y->data = node_to_kill->data ^ y->data;
+		node_to_kill->data  = node_to_kill->data ^ y->data;
+
+		}
+
+	if ( y->color == RBTREE$K_BLACK )
+		__rbtree_deleteFixup (tree, x);
+
+	tree->node_nr--;		/* Adjust nodes counter */
+
+	*node_to_free = y;		/* Return an address of node to be freed */
+}
+
+
+int	lib$rbtree_lookup	(
+			RB_TREE	*	tree,
+			u_int64_t	*key,
+			RB_NODE	**	retnode
+				)
+{
+RB_NODE *current = tree->root;
+int	res;
+
+	while ( current != &tree->sentinel )
+		{
+		if ( !(res = tree->keycmp(tree, key, current->data)) )
+			return	*retnode =  current, 1;	/* Return found node, SS$_NORMAL */
+
+		current = 0 > res ? current->left : current->right;
+		}
+
+	return	0;
+}
+
+
+int	lib$rbtree_init		(
+			RB_TREE		*tree,
+			void		*keycmp
+				)
+{
+	tree->sentinel.left = tree->sentinel.right = tree->root = &tree->sentinel;
+	tree->sentinel.parent = 0;
+	tree->sentinel.data = 0;
+	tree->keycmp = keycmp;
+	tree->sentinel.color = RBTREE$K_BLACK;
+
+	return	1;	/* SS$_NORMAL */
 }
 
 
 
 
 
-/* A record to keep application specific data */
-typedef	struct __my_record__	{
-	int	key;		/* A primary key of the record */
-	ASC	sts;		/* "Payload" of the data record*/
-} MY_RECORD;
+
+struct my_data	{
+	u_int64_t	key;		/* Key field */
+
+	int	n;			/* Payload part of the data record */
+	ASC	sts;
+	int	n2;
+};
 
 
-RB_TREE	 my_tree = {0};
 
-
-
-int	main	()
+static	int	my_keycmp	(
+			RB_TREE		*tree,
+			u_int64_t	*key1,
+			struct my_data	*data2
+			)
 {
-int	count = 1000000, res = 0, i = 0, rnd = 0, sz;
-time_t start,time2;
-volatile long unsigned t;
-RB_NODE	*pn;
-MY_RECORD *pr;
+u_int64_t	d1 = *key1;
 
-	/* Define RB Tree */
-	my_tree.keyoff = offsetof (MY_RECORD, key);		/* An offset to key field in the record */
+	return	*key1 - data2->key;
+}
 
-	my_tree.keydtp = RBTREE$K_IN4;				/* Signed integer 4-byte integer */
-	my_tree.keysz = sizeof(int);				/* Keys size if the size of the FLOW_RECORD.key */
-	my_tree.keycmp = __rbtree_cmpkey;			/* We will use a routine from the RB Tree API */
 
-	start = time(NULL);
-	srand (time (NULL));
+void	main	(int argc, char **argv)
+{
+u_int64_t	key;
+int		ct, status;
 
-	for( i = 0; i < count; i++)
+RB_NODE		*newnode, *oldnode, *retnode;
+RB_TREE		my_tree = {0};
+struct my_data *my_pdata;
+
+	status = lib$rbtree_init(&my_tree, my_keycmp);
+
+
+	for (ct = 135; ct; ct--)
 		{
-		/* Allocate memory for new RB TREE Entry */
-		if ( !(pn = malloc (sz = sizeof(RB_TREE))) )
+		key = rand() % 9 + 1;
+
+		$IFTRACE(g_trace, "key=%09d", key);
+
+		if ( 1 & lib$rbtree_lookup(&my_tree, &key, &oldnode) )
 			{
-			$LOG(STS$K_ERROR, "No memory (%d) octets for new RB Node/Data record, errno=%d", sz, errno);
-			break;
+			my_pdata = oldnode->data;
+
+			$IFTRACE(g_trace, "--------	key=%09d, pdata%p, data={%d, %.*s, %d}", key, oldnode->pdata, my_pdata->n, $ASC(&my_pdata->sts), my_pdata->n2);
+
+			lib$rbtree_delete(&my_tree, oldnode, &retnode);
+
+			my_pdata = retnode->data;
+			$IFTRACE(g_trace, "--------	key=%09d, pdata%p, data={%d, %.*s, %d}", key, retnode->pdata, my_pdata->n, $ASC(&my_pdata->sts), my_pdata->n2);
+
+			free(retnode->data);
+			free(retnode);
 			}
+		else	{
+			newnode = malloc(sizeof(RB_NODE));
+			newnode->pdata = my_pdata = malloc(sizeof(struct my_data));
 
-		/* Initialize RB Node/Data Entry with my data */
-		pn->color = RBTREE$K_RED;
-		pn->link[RBTREE$K_LLINK] = pn->link[RBTREE$K_RLINK] = NULL;
+			my_pdata->key = key;
+			my_pdata->n = ct;
+			my_pdata->n2 = ct;
 
+			$ASCLEN(&my_pdata->sts) = (unsigned char) snprintf($ASCPTR(&my_pdata->sts), ASC$K_SZ, "Key/Data = %09d/%09d", key, ct);
 
-		/* Allocate memory for new Data Record */
-		if ( !(pr = malloc (sizeof(MY_RECORD))) )
-			{
-			$LOG(STS$K_ERROR, "No memory (%d) octets for new RB Node/Data record, errno=%d", sz, errno);
-			break;
+			$IFTRACE(g_trace, "+++++++++	key=%09d, pdata%p, data={%d, %.*s, %d}", key, newnode->pdata, my_pdata->n, $ASC(&my_pdata->sts), my_pdata->n2);
+
+			if ( !(1 & (status = lib$rbtree_insert(&my_tree, &key, newnode, &retnode))) )
+				{
+				$LOG(STS$K_ERROR, "key=%09d, pdata%p, data={%d, %.*s, %d}", key, newnode->pdata, my_pdata->n, $ASC(&my_pdata->sts), my_pdata->n2);
+				$LOG(STS$K_ERROR, "key=%09d, pdata%p, data={%d, %.*s, %d}", key, newnode->pdata, my_pdata->n, $ASC(&my_pdata->sts), my_pdata->n2);
+				}
 			}
-
-		/*
-		** Initalize My Record area
-		** (My record is a continuation of the RB NODE area )
-		*/
-		pn->ptr = pr;
-		pr->key = (rand() % count);
-		$ASCLEN(&pr->sts) = (unsigned char) snprintf($ASCPTR(&pr->sts), ASC$K_SZ, "Record #%09d, key=%08x", i, pr->key);
-
-		/* Insert new node ! */
-		//$IFTRACE(g_trace, "Inserting : %.*s ...", $ASC(&pr->sts));
-		res = __util$rbtree_insert ( &my_tree, pn );
-
-
-		if ( my_tree.node_nr == 500000 )
-			break;
 		}
-
-	time2 = time(NULL);
-
-	$IFTRACE(g_trace, "Elapsed %f seconds", difftime(time2, start));
-	$IFTRACE(g_trace, "A number of node in the tree=%d\n", my_tree.node_nr);
-
-	return 0 ;
 }
