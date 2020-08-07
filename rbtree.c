@@ -1,6 +1,6 @@
 #define	__MODULE__	"RBTREE"
-#define	__IDENT__	"X.00-02ECO1"
-#define	__REV__		"0.02.1"
+#define	__IDENT__	"X.00-02ECO2"
+#define	__REV__		"0.02.2"
 
 #ifdef	__GNUC__
 	#ident			__IDENT__
@@ -27,8 +27,9 @@
 **
 **	18-MAR-2020	RRL	Source level optimization in the rb_tree_search() - removed a multiple calling of cmpkey() routine.
 **
-**	11-JUN-2020	RRL	Fixe compilation warning and other minor bugs.
+**	11-JUN-2020	RRL	Fixed compilation warning and other minor bugs.
 **
+**	 7-AUG-2020	RRL	X.00-02ECO2 : fixed a bug with incorrect node deletion in the rb_tree_remove()
 **--
 */
 
@@ -48,7 +49,7 @@ static const unsigned *__starlet_ul__ = (unsigned *) &__starlet__;
 
 
 inline static void DoRotateL	(
-			RB_NODE	*tree,
+			RB_TREE	*tree,
 		RB_TREE_NODE	*node
 		)
 {
@@ -80,7 +81,7 @@ RB_TREE_NODE	*node0 = node->parent, *node1 = node, *node2 = node->left;
 
 
 inline static void DoRotateR	(
-			RB_NODE	*tree,
+			RB_TREE	*tree,
 		RB_TREE_NODE	*node
 				)
 {
@@ -124,7 +125,7 @@ inline	static RB_TREE_NODE *DoGetUncle(
 
 
 inline static void DoInsertNode	(
-			RB_NODE	*tree,
+			RB_TREE	*tree,
 		RB_TREE_NODE	*root,
 		RB_TREE_NODE	*node
 				)
@@ -150,7 +151,7 @@ inline static void DoInsertNode	(
 }
 
 inline static void DoInsertMaintain(
-			RB_NODE	*tree,
+			RB_TREE	*tree,
 		RB_TREE_NODE	*node
 				)
 {
@@ -210,7 +211,7 @@ inline static void DoInsertMaintain(
 }
 
 inline static void DoDeleteMaintain(
-			RB_NODE	*tree,
+			RB_TREE	*tree,
 		RB_TREE_NODE	*node
 				)
 {
@@ -304,7 +305,7 @@ RB_TREE_NODE	*parent = node->parent, *brother;
 
 
 inline static RB_TREE_NODE *DoFindDeletionScapegoat(
-				RB_NODE	*tree,
+				RB_TREE	*tree,
 			RB_TREE_NODE	*node
 			)
 {
@@ -339,9 +340,9 @@ RB_TREE_NODE	*scapegoatNode;
 
 
 int	rb_tree_init	(
-		RB_NODE *tree,
+		RB_TREE *tree,
 		int	keySize,
-		int	(*keycmp)(RB_NODE *tree, const void *key1, const void *key2)
+		int	(*keycmp)(RB_TREE *tree, const void *key1, const void *key2)
 		)
 {
 	/* Initialize a new red-black tree structure */
@@ -366,7 +367,7 @@ int	rb_tree_init	(
 
 
 int	rb_tree_insert	(
-			RB_NODE	*tree,
+			RB_TREE	*tree,
 		RB_TREE_NODE	*node
 				)
 {
@@ -393,8 +394,9 @@ int	rb_tree_insert	(
 
 
 void	rb_tree_remove	(
-		RB_NODE		*tree,
-		RB_TREE_NODE	*node
+		RB_TREE		*tree,
+		RB_TREE_NODE	*node,
+		RB_TREE_NODE	**node_to_free
 		)
 {
 RB_TREE_NODE	*scapegoatNode, *checkNode;
@@ -407,9 +409,22 @@ RB_TREE_NODE	*scapegoatNode, *checkNode;
 
 	if ( node != scapegoatNode )
 		{
-		memcpy(&node->key, &scapegoatNode->key, tree->keysz);
+		/*
+		**	i = i ^ k;
+		**	k = i ^ k;
+		**	i = i ^ k;
+		*/
+		node->key = node->key ^ scapegoatNode->key;
+		scapegoatNode->key = node->key ^ scapegoatNode->key;
+		node->key = node->key ^ scapegoatNode->key;
 
-		return	rb_tree_remove(tree, scapegoatNode);
+
+		node->data = node->data ^ scapegoatNode->data;
+		scapegoatNode->data = node->data ^ scapegoatNode->data;
+		node->data = node->data ^ scapegoatNode->data;
+
+
+		return	rb_tree_remove(tree, scapegoatNode, node_to_free);
 		}
 
 	/* Maintain red-black rules before deleting */
@@ -428,6 +443,8 @@ RB_TREE_NODE	*scapegoatNode, *checkNode;
 		}
 	else	tree->rootnode = &tree->nl_node;
 
+
+	*node_to_free = scapegoatNode;
 	tree->nr_node -= 1;
 
 	return;
@@ -435,7 +452,7 @@ RB_TREE_NODE	*scapegoatNode, *checkNode;
 
 
 
-int	rb_tree_search (RB_NODE *tree, void *pkey, RB_TREE_NODE **node)
+int	rb_tree_search (RB_TREE *tree, void *pkey, RB_TREE_NODE **node)
 {
 RB_TREE_NODE	*currentNode = tree->rootnode;
 int	status = * ((int *) pkey);
@@ -463,7 +480,7 @@ int	status = * ((int *) pkey);
 }
 
 
-RB_TREE_NODE	*rb_tree_node_head (RB_NODE* tree)
+RB_TREE_NODE	*rb_tree_node_head (RB_TREE* tree)
 {
 RB_TREE_NODE	*currentNode = tree->rootnode;
 
@@ -480,7 +497,7 @@ RB_TREE_NODE	*currentNode = tree->rootnode;
 }
 
 RB_TREE_NODE	*rb_tree_node_tail	(
-			RB_NODE* tree
+			RB_TREE* tree
 				)
 {
 RB_TREE_NODE	*currentNode = tree->rootnode;
@@ -498,7 +515,7 @@ RB_TREE_NODE	*currentNode = tree->rootnode;
 }
 
 RB_TREE_NODE	*rb_tree_node_next	(
-			RB_NODE	*tree,
+			RB_TREE	*tree,
 		RB_TREE_NODE	*node
 				)
 {
@@ -529,7 +546,7 @@ RB_TREE_NODE	*currentNode;
 }
 
 RB_TREE_NODE	*rb_tree_node_prev	(
-			RB_NODE	*tree,
+			RB_TREE	*tree,
 		RB_TREE_NODE	*node
 				)
 {
