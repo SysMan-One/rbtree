@@ -10,10 +10,14 @@ INCLUDEPATH	+=./
 SOURCES += \
 	rbtree_example.c \
 	rbtree.c \
-	utility_routines.c
+	utility_routines.c \
+	lib_rbtree.c
 
 HEADERS += \
-    rbtree.h
+	rbtree.h \
+	lib_rbtree.h
+
+
 
 #LIBS		+= -static
 

@@ -28,7 +28,7 @@
 **
 **  MODIFICATION HISTORY:
 **
-**
+**	27-AUG-2020	SYS	Correct aligment declaration: (push, 2) -> (push, 8)
 **--
 */
 
@@ -38,16 +38,15 @@ extern "C" {
 #endif
 
 
-#pragma	pack	(push, 2)
+#pragma	pack	(push, 8)
 
 typedef struct __rb_tree_node__
-{
-		int	is_black;		/* A color of node	*/
-
-						/* Links to paired nodes*/
+{						/* Links to paired nodes*/
 	struct __rb_tree_node__ *left;
 	struct __rb_tree_node__ *right;
 	struct __rb_tree_node__ *parent;
+
+	int	is_black;			/* A color of node	*/
 
 	long long	key;
 
@@ -61,19 +60,20 @@ typedef struct __rb_tree_node__
 
 typedef	struct __rb_tree__
 {
+	RB_TREE_NODE	*rootnode;
+	RB_TREE_NODE	nl_node;
+
 	int	magic;		/* A marker for initialized tree */
 
 	int	(*keycmp) (struct __rb_tree__ *tree, const void * key1, const void *key2);
-	int	keysz;		/* Key size */
 	int	nr_node;	/* A number of nodes in the tree */
 
-	RB_TREE_NODE	*rootnode;
-	RB_TREE_NODE	nl_node;
+
 } RB_TREE;
 
 #pragma	pack	(pop)
 
-int		rb_tree_init (RB_TREE *tree, int keySize, int (*keycmp) (RB_TREE *tree, const void *key1, const void *key2));
+int		rb_tree_init (RB_TREE *tree, int (*keycmp) (RB_TREE *tree, const void *key1, const void *key2));
 void		rb_tree_destroy (RB_TREE *tree);
 int		rb_tree_size (RB_TREE *tree);
 int		rb_tree_insert (RB_TREE *tree, RB_TREE_NODE *node);

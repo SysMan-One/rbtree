@@ -341,13 +341,11 @@ RB_TREE_NODE	*scapegoatNode;
 
 int	rb_tree_init	(
 		RB_TREE *tree,
-		int	keySize,
 		int	(*keycmp)(RB_TREE *tree, const void *key1, const void *key2)
 		)
 {
 	/* Initialize a new red-black tree structure */
 	tree->magic = * (__starlet_ul__);
-	tree->keysz = keySize;
 	tree->keycmp = keycmp;
 	tree->nr_node = 0;
 
